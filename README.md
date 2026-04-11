@@ -1,6 +1,6 @@
 # 🎨 Tab Colors
 
-![tab colors](images/tab_colors.gif)
+![tab colors](images/tabs_colors_reduced.gif)
 
 Tab Colors lets you right-click a tab in Obsidian and give it a custom color.
 
