@@ -43,6 +43,58 @@
   font-weight: 600;
 }
 
+.workspace-leaf.tab-colors-note-blend .workspace-leaf-content[data-type="markdown"] .view-content,
+.workspace-leaf.tab-colors-note-blend .workspace-leaf-content[data-type="markdown"] .view-header,
+.workspace-leaf.tab-colors-note-blend .workspace-leaf-content[data-type="markdown"] .markdown-source-view.mod-cm6 .cm-scroller,
+.workspace-leaf.tab-colors-note-blend .workspace-leaf-content[data-type="markdown"] .markdown-preview-view {
+  background-repeat: no-repeat;
+}
+
+.workspace-leaf.tab-colors-note-blend .workspace-leaf-content[data-type="markdown"] .view-header,
+.workspace-leaf.tab-colors-note-blend .workspace-leaf-content[data-type="markdown"] .view-header-title-container,
+.workspace-leaf.tab-colors-note-blend .workspace-leaf-content[data-type="markdown"] .view-actions {
+  background-color: transparent;
+}
+
+.workspace-leaf.tab-colors-note-blend.tab-colors-note-effect-gradient.tab-colors-note-blend-horizontal .workspace-leaf-content[data-type="markdown"] .view-content,
+.workspace-leaf.tab-colors-note-blend.tab-colors-note-effect-gradient.tab-colors-note-blend-horizontal .workspace-leaf-content[data-type="markdown"] .view-header,
+.workspace-leaf.tab-colors-note-blend.tab-colors-note-effect-gradient.tab-colors-note-blend-horizontal .workspace-leaf-content[data-type="markdown"] .markdown-source-view.mod-cm6 .cm-scroller,
+.workspace-leaf.tab-colors-note-blend.tab-colors-note-effect-gradient.tab-colors-note-blend-horizontal .workspace-leaf-content[data-type="markdown"] .markdown-preview-view {
+  background-image: linear-gradient(
+    to bottom,
+    var(--tab-colors-note-blend) 0px,
+    var(--tab-colors-note-blend-78) calc(var(--tab-colors-blend-length) * 0.10),
+    var(--tab-colors-note-blend-45) calc(var(--tab-colors-blend-length) * 0.38),
+    var(--tab-colors-note-blend-18) calc(var(--tab-colors-blend-length) * 0.66),
+    transparent var(--tab-colors-blend-length)
+  );
+  background-size: 100% var(--tab-colors-blend-length);
+}
+
+.workspace-leaf.tab-colors-note-blend.tab-colors-note-effect-gradient.tab-colors-note-blend-vertical .workspace-leaf-content[data-type="markdown"] .view-content,
+.workspace-leaf.tab-colors-note-blend.tab-colors-note-effect-gradient.tab-colors-note-blend-vertical .workspace-leaf-content[data-type="markdown"] .view-header,
+.workspace-leaf.tab-colors-note-blend.tab-colors-note-effect-gradient.tab-colors-note-blend-vertical .workspace-leaf-content[data-type="markdown"] .markdown-source-view.mod-cm6 .cm-scroller,
+.workspace-leaf.tab-colors-note-blend.tab-colors-note-effect-gradient.tab-colors-note-blend-vertical .workspace-leaf-content[data-type="markdown"] .markdown-preview-view {
+  background-image: linear-gradient(
+    to right,
+    var(--tab-colors-note-blend) 0px,
+    var(--tab-colors-note-blend-78) calc(var(--tab-colors-blend-length) * 0.10),
+    var(--tab-colors-note-blend-45) calc(var(--tab-colors-blend-length) * 0.38),
+    var(--tab-colors-note-blend-18) calc(var(--tab-colors-blend-length) * 0.66),
+    transparent var(--tab-colors-blend-length)
+  );
+  background-size: var(--tab-colors-blend-length) 100%;
+}
+
+.workspace-leaf.tab-colors-note-blend.tab-colors-note-effect-dots .workspace-leaf-content[data-type="markdown"] .view-content,
+.workspace-leaf.tab-colors-note-blend.tab-colors-note-effect-dots .workspace-leaf-content[data-type="markdown"] .view-header,
+.workspace-leaf.tab-colors-note-blend.tab-colors-note-effect-dots .workspace-leaf-content[data-type="markdown"] .markdown-source-view.mod-cm6 .cm-scroller,
+.workspace-leaf.tab-colors-note-blend.tab-colors-note-effect-dots .workspace-leaf-content[data-type="markdown"] .markdown-preview-view {
+  background-image: radial-gradient(circle at center, var(--tab-colors-dot-color) calc(var(--tab-colors-dot-size) * 0.5), transparent calc(var(--tab-colors-dot-size) * 0.5 + 0.8px));
+  background-size: var(--tab-colors-dot-spacing) var(--tab-colors-dot-spacing);
+  background-repeat: repeat;
+}
+
 .tab-colors-swatch-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(28px, 1fr));
