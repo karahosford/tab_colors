@@ -22,7 +22,7 @@ I am still learning, so please be kind. If you spot rough edges or have ideas, f
 
 ![Plugin settings showing editable named color presets](images/named-presets-settings.png)
 
-![Vertical tabs with full-tab custom background colors and readable text](images/vertical-tabs-colored.png)
+![Vertical tabs with full-tab custom background colors and readable text](images/verticle-tabs-colored.png)
 
 ## Installation (Manual)
 
