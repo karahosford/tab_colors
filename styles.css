@@ -1,0 +1,64 @@
+.workspace-tab-header.tab-colors-custom {
+  background: var(--tab-colors-bg) !important;
+  border-top: 2px solid color-mix(in srgb, var(--tab-colors-bg) 85%, black);
+  border-radius: 6px 6px 0 0;
+}
+
+.workspace-tab-header.tab-colors-custom.is-active {
+  background: var(--tab-colors-bg) !important;
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--tab-colors-text) 35%, transparent);
+}
+
+.workspace-tabs.mod-stacked .workspace-tab-header.tab-colors-custom,
+.workspace-tabs.mod-vertical .workspace-tab-header.tab-colors-custom,
+.workspace-tabs.mod-stacked .workspace-tab-header.tab-colors-custom.is-active,
+.workspace-tabs.mod-vertical .workspace-tab-header.tab-colors-custom.is-active {
+  border-top: none;
+  border-left: 3px solid color-mix(in srgb, var(--tab-colors-bg) 75%, black);
+  border-radius: 6px;
+}
+
+.workspace-tab-header.tab-colors-custom .workspace-tab-header-inner,
+.workspace-tab-header.tab-colors-custom .workspace-tab-header-inner-title,
+.workspace-tab-header.tab-colors-custom .workspace-tab-header-inner-icon,
+.workspace-tab-header.tab-colors-custom .workspace-tab-header-inner-close-button,
+.workspace-tab-header.tab-colors-custom .workspace-tab-header-status-icon {
+  color: var(--tab-colors-text);
+}
+
+.workspace-tab-header.tab-colors-custom .workspace-tab-header-inner {
+  background: var(--tab-colors-bg) !important;
+}
+
+.workspace-tabs.mod-stacked .workspace-tab-header.tab-colors-custom .workspace-tab-header-inner,
+.workspace-tabs.mod-vertical .workspace-tab-header.tab-colors-custom .workspace-tab-header-inner,
+.workspace-tabs.mod-stacked .workspace-tab-header.tab-colors-custom:hover .workspace-tab-header-inner,
+.workspace-tabs.mod-vertical .workspace-tab-header.tab-colors-custom:hover .workspace-tab-header-inner,
+.workspace-tabs.mod-stacked .workspace-tab-header.tab-colors-custom.is-active .workspace-tab-header-inner,
+.workspace-tabs.mod-vertical .workspace-tab-header.tab-colors-custom.is-active .workspace-tab-header-inner {
+  background: var(--tab-colors-bg) !important;
+}
+
+.workspace-tab-header.tab-colors-custom .workspace-tab-header-inner-title {
+  font-weight: 600;
+}
+
+.tab-colors-swatch-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(28px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.tab-colors-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--background-modifier-border);
+  cursor: pointer;
+  padding: 0;
+}
+
+.tab-colors-swatch:hover {
+  transform: translateY(-1px);
+}

@@ -1,0 +1,10 @@
+{
+  "id": "tab-colors",
+  "name": "Tab Colors",
+  "version": "0.1.0",
+  "minAppVersion": "1.5.0",
+  "description": "Right-click a tab to set a custom color.",
+  "author": "Kara Hosford",
+  "authorUrl": "",
+  "isDesktopOnly": false
+}

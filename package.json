@@ -1,0 +1,23 @@
+{
+  "name": "tab-colors",
+  "version": "0.1.0",
+  "description": "Obsidian plugin for custom tab colors from tab context menu.",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "node esbuild.config.mjs production"
+  },
+  "keywords": [
+    "obsidian",
+    "plugin"
+  ],
+  "author": "Kara Hosford",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.14.15",
+    "esbuild": "^0.23.0",
+    "obsidian": "^1.6.7",
+    "tslib": "^2.6.3",
+    "typescript": "^5.5.4"
+  }
+}
