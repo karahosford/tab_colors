@@ -65,13 +65,3 @@ Production build:
 ```bash
 npm.cmd run build
 ```
-
-## Release Checklist
-
-1. Update `version` in `manifest.json`.
-2. Update `versions.json` mapping.
-3. Run `npm.cmd run build`.
-4. Create a GitHub release and attach a zip containing:
-	- `manifest.json`
-	- `main.js`
-	- `styles.css`
