@@ -36,9 +36,13 @@ var DEFAULT_SETTINGS = {
   fileColors: {},
   presetColors: [...DEFAULT_PRESET_COLORS],
   tagColorRules: [],
+  folderColorRules: [],
+  frontmatterColorKey: "tabColor",
+  accessibilityMode: false,
+  minContrastRatio: 7,
   blendLengthPx: 260,
   blendIntensity: 100,
-  noteBackgroundEffect: "gradient",
+  noteBackgroundEffect: "dots",
   dotSizePx: 2,
   dotSpacingPx: 16,
   dotIntensity: 55
@@ -46,10 +50,12 @@ var DEFAULT_SETTINGS = {
 var ColorPickerModal = class extends import_obsidian.Modal {
   result = null;
   selectedColor;
+  plugin;
   onSubmit;
   presetColors;
   constructor(plugin, initialColor, presetColors, onSubmit) {
     super(plugin.app);
+    this.plugin = plugin;
     this.onSubmit = onSubmit;
     this.presetColors = presetColors;
     this.selectedColor = initialColor ?? "#3aa6ff";
@@ -83,8 +89,16 @@ var ColorPickerModal = class extends import_obsidian.Modal {
       picker.setValue(this.selectedColor);
       picker.onChange((value) => {
         this.selectedColor = value;
+        updateContrastWarning();
       });
     });
+    const warningEl = contentEl.createDiv({ cls: "tab-colors-contrast-warning" });
+    const updateContrastWarning = () => {
+      const warning = this.plugin.getContrastWarning(this.selectedColor);
+      warningEl.textContent = warning ?? "";
+      warningEl.classList.toggle("is-visible", Boolean(warning));
+    };
+    updateContrastWarning();
     new import_obsidian.Setting(contentEl).addButton((button) => {
       button.setButtonText("Apply").setCta().onClick(() => {
         this.result = this.selectedColor;
@@ -105,10 +119,39 @@ var ColorPickerModal = class extends import_obsidian.Modal {
 };
 var TabColorsPlugin = class extends import_obsidian.Plugin {
   settings = DEFAULT_SETTINGS;
+  applyAllTimeoutId = null;
+  leafApplyState = /* @__PURE__ */ new WeakMap();
   async onload() {
     await this.loadSettings();
     this.applyGlobalBlendSettings();
     this.addSettingTab(new TabColorsSettingTab(this.app, this));
+    this.registerEvent(
+      this.app.vault.on("rename", async (file, oldPath) => {
+        if (!(file instanceof import_obsidian.TFile)) {
+          return;
+        }
+        const existing = this.settings.fileColors[oldPath];
+        if (!existing) {
+          return;
+        }
+        delete this.settings.fileColors[oldPath];
+        this.settings.fileColors[file.path] = existing;
+        await this.saveSettings();
+        this.scheduleApplyAllTabColors(0);
+      })
+    );
+    this.registerEvent(
+      this.app.vault.on("delete", async (file) => {
+        if (!(file instanceof import_obsidian.TFile)) {
+          return;
+        }
+        if (!this.settings.fileColors[file.path]) {
+          return;
+        }
+        delete this.settings.fileColors[file.path];
+        await this.saveSettings();
+      })
+    );
     this.registerEvent(
       this.app.workspace.on("file-menu", (menu, file, source, leaf) => {
         if (!(file instanceof import_obsidian.TFile)) {
@@ -119,51 +162,119 @@ var TabColorsPlugin = class extends import_obsidian.Plugin {
     );
     this.registerEvent(
       this.app.workspace.on("layout-change", () => {
-        this.applyAllTabColors();
+        this.scheduleApplyAllTabColors();
       })
     );
     this.registerEvent(
       this.app.workspace.on("active-leaf-change", () => {
-        this.applyAllTabColors();
+        this.scheduleApplyAllTabColors();
       })
     );
     this.registerEvent(
       this.app.metadataCache.on("changed", () => {
-        this.applyAllTabColors();
+        this.scheduleApplyAllTabColors();
       })
     );
     this.app.workspace.onLayoutReady(() => {
-      this.applyAllTabColors();
+      this.scheduleApplyAllTabColors(0);
+    });
+    this.addCommand({
+      id: "set-tab-color",
+      name: "Set color for current tab",
+      checkCallback: (checking) => {
+        const activeFile = this.app.workspace.getActiveFile();
+        if (activeFile) {
+          if (!checking) {
+            const current = this.settings.fileColors[activeFile.path] ?? null;
+            new ColorPickerModal(this, current, this.settings.presetColors, async (selected) => {
+              if (!selected) {
+                return;
+              }
+              this.settings.fileColors[activeFile.path] = selected;
+              await this.saveSettings();
+              this.scheduleApplyAllTabColors(0);
+            }).open();
+          }
+          return true;
+        }
+        return false;
+      }
+    });
+    this.addCommand({
+      id: "clear-tab-color",
+      name: "Clear color for current tab",
+      checkCallback: (checking) => {
+        const activeFile = this.app.workspace.getActiveFile();
+        if (activeFile && this.settings.fileColors[activeFile.path]) {
+          if (!checking) {
+            delete this.settings.fileColors[activeFile.path];
+            this.saveSettings().then(() => this.scheduleApplyAllTabColors(0));
+          }
+          return true;
+        }
+        return false;
+      }
     });
   }
   onunload() {
+    if (this.applyAllTimeoutId !== null) {
+      window.clearTimeout(this.applyAllTimeoutId);
+      this.applyAllTimeoutId = null;
+    }
     this.clearAllTabStyles();
     document.body.style.removeProperty("--tab-colors-blend-length");
     document.body.style.removeProperty("--tab-colors-dot-size");
     document.body.style.removeProperty("--tab-colors-dot-spacing");
   }
   addTabColorMenuItems(menu, file, source, leaf) {
-    const isLikelyTabContext = source.toLowerCase().includes("tab") || source.toLowerCase().includes("leaf");
+    const sourceLower = source.toLowerCase();
+    const isLikelyTabContext = sourceLower.includes("tab") || sourceLower.includes("leaf");
+    const hasTabHeader = this.getTabHeaderEl(leaf) !== null;
+    if (!isLikelyTabContext && !hasTabHeader) {
+      return;
+    }
     menu.addItem((item) => {
-      item.setTitle("Set Tab Color").setIcon("palette").setSection("action").setChecked(Boolean(this.settings.fileColors[file.path])).onClick(() => {
-        const current = this.settings.fileColors[file.path] ?? null;
-        new ColorPickerModal(this, current, this.settings.presetColors, async (selected) => {
-          if (!selected) {
-            return;
-          }
-          this.settings.fileColors[file.path] = selected;
-          await this.saveSettings();
-          this.applyAllTabColors();
-        }).open();
+      const subMenu = item.setTitle("Set Tab Color").setIcon("palette").setSection("action").setSubmenu();
+      this.settings.presetColors.forEach((preset) => {
+        subMenu.addItem((subItem) => {
+          subItem.setTitle(preset.name).onClick(async () => {
+            this.settings.fileColors[file.path] = preset.color;
+            await this.saveSettings();
+            this.scheduleApplyAllTabColors(0);
+          });
+        });
+      });
+      subMenu.addSeparator();
+      subMenu.addItem((subItem) => {
+        subItem.setTitle("Custom Color...").setIcon("palette").onClick(() => {
+          const current = this.settings.fileColors[file.path] ?? null;
+          new ColorPickerModal(this, current, this.settings.presetColors, async (selected) => {
+            if (!selected) {
+              return;
+            }
+            this.settings.fileColors[file.path] = selected;
+            await this.saveSettings();
+            this.scheduleApplyAllTabColors(0);
+          }).open();
+        });
       });
     });
     menu.addItem((item) => {
       item.setTitle("Clear Tab Color").setIcon("paintbrush").setSection("action").setDisabled(!this.settings.fileColors[file.path]).onClick(async () => {
         delete this.settings.fileColors[file.path];
         await this.saveSettings();
-        this.applyAllTabColors();
+        this.scheduleApplyAllTabColors(0);
       });
     });
+  }
+  scheduleApplyAllTabColors(delayMs = 60) {
+    if (this.applyAllTimeoutId !== null) {
+      window.clearTimeout(this.applyAllTimeoutId);
+    }
+    this.applyAllTimeoutId = window.setTimeout(() => {
+      this.applyAllTimeoutId = null;
+      this.applyAllTabColors();
+    }, delayMs);
   }
   getFileFromLeaf(leaf) {
     if (!leaf || typeof leaf !== "object") {
@@ -197,8 +308,15 @@ var TabColorsPlugin = class extends import_obsidian.Plugin {
     return Boolean(tabsContainer?.classList.contains("mod-vertical") || tabsContainer?.classList.contains("mod-stacked"));
   }
   applyAllTabColors() {
-    const leaves = this.app.workspace.getLeavesOfType("markdown");
-    for (const leaf of leaves) {
+    const workspaceWithIterator = this.app.workspace;
+    if (typeof workspaceWithIterator.iterateAllLeaves === "function") {
+      workspaceWithIterator.iterateAllLeaves((leaf) => {
+        this.applyTabColorForLeaf(leaf);
+      });
+      return;
+    }
+    const markdownLeaves = this.app.workspace.getLeavesOfType("markdown");
+    for (const leaf of markdownLeaves) {
       this.applyTabColorForLeaf(leaf);
     }
   }
@@ -208,17 +326,40 @@ var TabColorsPlugin = class extends import_obsidian.Plugin {
     const isVerticalLayout = this.isVerticalTabLayout(tabHeaderEl);
     const file = this.getFileFromLeaf(leaf);
     const color = file ? this.resolveColorForFile(file) : null;
+    const effect = this.settings.noteBackgroundEffect;
+    const state = color ? [
+      color,
+      effect,
+      isVerticalLayout ? "vertical" : "horizontal",
+      this.settings.accessibilityMode ? "a11y-on" : "a11y-off",
+      String(this.settings.minContrastRatio),
+      String(this.settings.blendIntensity),
+      String(this.settings.dotIntensity)
+    ].join("|") : "none";
+    if (typeof leaf === "object" && leaf !== null) {
+      const previousState = this.leafApplyState.get(leaf);
+      if (previousState === state) {
+        return;
+      }
+      this.leafApplyState.set(leaf, state);
+    }
     if (color) {
       const textColor = this.getContrastingTextColor(color);
+      const contrastWarning = this.getContrastWarning(color);
       if (tabHeaderEl) {
         tabHeaderEl.classList.add("tab-colors-custom");
+        tabHeaderEl.classList.toggle("tab-colors-low-contrast", Boolean(contrastWarning));
         tabHeaderEl.style.setProperty("--tab-colors-bg", color);
         tabHeaderEl.style.setProperty("--tab-colors-text", textColor);
+        if (contrastWarning) {
+          tabHeaderEl.setAttribute("title", contrastWarning);
+        } else {
+          tabHeaderEl.removeAttribute("title");
+        }
       }
       if (leafContainerEl) {
         leafContainerEl.style.setProperty("--tab-colors-note-blend", color);
         this.applyLeafBlendStrengthVariables(leafContainerEl, color);
-        const effect = this.settings.noteBackgroundEffect;
         const hasNoteEffect = effect !== "none";
         leafContainerEl.classList.toggle("tab-colors-note-blend", hasNoteEffect);
         leafContainerEl.classList.toggle("tab-colors-note-effect-gradient", hasNoteEffect && effect === "gradient");
@@ -229,8 +370,10 @@ var TabColorsPlugin = class extends import_obsidian.Plugin {
     } else {
       if (tabHeaderEl) {
         tabHeaderEl.classList.remove("tab-colors-custom");
+        tabHeaderEl.classList.remove("tab-colors-low-contrast");
         tabHeaderEl.style.removeProperty("--tab-colors-bg");
         tabHeaderEl.style.removeProperty("--tab-colors-text");
+        tabHeaderEl.removeAttribute("title");
       }
       if (leafContainerEl) {
         leafContainerEl.classList.remove("tab-colors-note-blend");
@@ -250,8 +393,10 @@ var TabColorsPlugin = class extends import_obsidian.Plugin {
     const coloredTabs = document.querySelectorAll(".workspace-tab-header.tab-colors-custom");
     coloredTabs.forEach((tab) => {
       tab.classList.remove("tab-colors-custom");
+      tab.classList.remove("tab-colors-low-contrast");
       tab.style.removeProperty("--tab-colors-bg");
       tab.style.removeProperty("--tab-colors-text");
+      tab.removeAttribute("title");
     });
     const blendedLeaves = document.querySelectorAll(".workspace-leaf.tab-colors-note-blend");
     blendedLeaves.forEach((leaf) => {
@@ -272,7 +417,67 @@ var TabColorsPlugin = class extends import_obsidian.Plugin {
     if (manualColor) {
       return manualColor;
     }
-    return this.getTagRuleColor(file);
+    const frontmatterColor = this.getFrontmatterColor(file);
+    if (frontmatterColor) {
+      return frontmatterColor;
+    }
+    const tagColor = this.getTagRuleColor(file);
+    if (tagColor) {
+      return tagColor;
+    }
+    return this.getFolderRuleColor(file);
+  }
+  getFolderRuleColor(file) {
+    if (this.settings.folderColorRules.length === 0) {
+      return null;
+    }
+    const parentPath = file.parent?.path;
+    if (parentPath === void 0) return null;
+    for (const rule of this.settings.folderColorRules) {
+      let ruleFolder = rule.folder.trim();
+      if (ruleFolder.startsWith("/")) ruleFolder = ruleFolder.slice(1);
+      if (ruleFolder.endsWith("/")) ruleFolder = ruleFolder.slice(0, -1);
+      if (ruleFolder === "" && (parentPath === "/" || parentPath === "")) {
+        return rule.color;
+      }
+      if (parentPath === ruleFolder || parentPath.startsWith(ruleFolder + "/")) {
+        return rule.color;
+      }
+    }
+    return null;
+  }
+  getFrontmatterColor(file) {
+    const configuredKey = this.settings.frontmatterColorKey.trim();
+    if (!configuredKey) {
+      return null;
+    }
+    const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
+    if (!frontmatter || typeof frontmatter !== "object") {
+      return null;
+    }
+    const frontmatterMap = frontmatter;
+    let rawValue = frontmatterMap[configuredKey];
+    if (rawValue === void 0) {
+      const configuredKeyLower = configuredKey.toLowerCase();
+      const matchedKey = Object.keys(frontmatterMap).find((key) => key.toLowerCase() === configuredKeyLower);
+      if (matchedKey) {
+        rawValue = frontmatterMap[matchedKey];
+      }
+    }
+    if (typeof rawValue !== "string") {
+      return null;
+    }
+    return this.normalizeHexColorValue(rawValue);
+  }
+  normalizeHexColorValue(value) {
+    const trimmed = value.trim();
+    if (/^#[0-9a-fA-F]{3}$/.test(trimmed) || /^#[0-9a-fA-F]{6}$/.test(trimmed)) {
+      return trimmed;
+    }
+    if (/^[0-9a-fA-F]{3}$/.test(trimmed) || /^[0-9a-fA-F]{6}$/.test(trimmed)) {
+      return `#${trimmed}`;
+    }
+    return null;
   }
   getTagRuleColor(file) {
     if (this.settings.tagColorRules.length === 0) {
@@ -351,16 +556,49 @@ var TabColorsPlugin = class extends import_obsidian.Plugin {
     return Math.min(max, Math.max(min, value));
   }
   getContrastingTextColor(color) {
+    const report = this.getContrastReport(color);
+    if (report) {
+      return report.textColor;
+    }
+    return "#111111";
+  }
+  getContrastWarning(color) {
+    if (!this.settings.accessibilityMode) {
+      return null;
+    }
+    const report = this.getContrastReport(color);
+    if (!report) {
+      return null;
+    }
+    if (report.ratio >= this.settings.minContrastRatio) {
+      return null;
+    }
+    return `Low contrast: best text ratio ${report.ratio.toFixed(2)}:1 is below minimum ${this.settings.minContrastRatio.toFixed(1)}:1`;
+  }
+  getContrastReport(color) {
     const rgb = this.parseHexColor(color);
     if (!rgb) {
-      return "#111111";
+      return null;
     }
-    const [r, g, b] = rgb.map((value) => {
+    const bgLuminance = this.getRelativeLuminance(rgb[0], rgb[1], rgb[2]);
+    const blackContrast = this.getContrastRatio(bgLuminance, 0);
+    const whiteContrast = this.getContrastRatio(bgLuminance, 1);
+    if (blackContrast >= whiteContrast) {
+      return { textColor: "#111111", ratio: blackContrast };
+    }
+    return { textColor: "#ffffff", ratio: whiteContrast };
+  }
+  getRelativeLuminance(r, g, b) {
+    const channels = [r, g, b].map((value) => {
       const channel = value / 255;
       return channel <= 0.03928 ? channel / 12.92 : Math.pow((channel + 0.055) / 1.055, 2.4);
     });
-    const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-    return luminance > 0.45 ? "#111111" : "#ffffff";
+    return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+  }
+  getContrastRatio(firstLuminance, secondLuminance) {
+    const lighter = Math.max(firstLuminance, secondLuminance);
+    const darker = Math.min(firstLuminance, secondLuminance);
+    return (lighter + 0.05) / (darker + 0.05);
   }
   parseHexColor(color) {
     const hex = color.trim().replace(/^#/, "");
@@ -393,10 +631,17 @@ var TabColorsPlugin = class extends import_obsidian.Plugin {
     const presetColors = presetSource.map((value, index) => this.normalizePreset(value, index)).filter((value) => value !== null);
     const tagRuleSource = Array.isArray(raw.tagColorRules) ? raw.tagColorRules : [];
     const tagColorRules = tagRuleSource.map((value) => this.normalizeTagRule(value)).filter((value) => value !== null);
+    const folderRuleSource = Array.isArray(raw.folderColorRules) ? raw.folderColorRules : [];
+    const folderColorRules = folderRuleSource.map((value) => this.normalizeFolderRule(value)).filter((value) => value !== null);
+    const frontmatterColorKey = typeof raw.frontmatterColorKey === "string" && raw.frontmatterColorKey.trim().length > 0 ? raw.frontmatterColorKey.trim() : DEFAULT_SETTINGS.frontmatterColorKey;
     return {
       fileColors: raw.fileColors ?? {},
       presetColors: presetColors.length > 0 ? presetColors : DEFAULT_PRESET_COLORS.map((preset) => ({ ...preset })),
       tagColorRules,
+      folderColorRules,
+      frontmatterColorKey,
+      accessibilityMode: Boolean(raw.accessibilityMode),
+      minContrastRatio: this.clamp(Number(raw.minContrastRatio ?? DEFAULT_SETTINGS.minContrastRatio), 4.5, 12),
       blendLengthPx: this.clamp(Number(raw.blendLengthPx ?? DEFAULT_SETTINGS.blendLengthPx), 80, 600),
       blendIntensity: this.clamp(Number(raw.blendIntensity ?? DEFAULT_SETTINGS.blendIntensity), 0, 100),
       noteBackgroundEffect: this.normalizeNoteBackgroundEffect(raw.noteBackgroundEffect),
@@ -425,6 +670,22 @@ var TabColorsPlugin = class extends import_obsidian.Plugin {
     }
     return {
       tag,
+      color: rule.color
+    };
+  }
+  normalizeFolderRule(value) {
+    if (!value || typeof value !== "object") {
+      return null;
+    }
+    const rule = value;
+    if (typeof rule.folder !== "string" || typeof rule.color !== "string") {
+      return null;
+    }
+    if (rule.color.trim().length === 0) {
+      return null;
+    }
+    return {
+      folder: rule.folder,
       color: rule.color
     };
   }
@@ -529,6 +790,64 @@ var TabColorsSettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.saveData(this.plugin.settings);
         this.plugin.applyAllTabColors();
         this.display();
+      });
+    });
+    containerEl.createEl("h3", { text: "Folder Auto Colors" });
+    new import_obsidian.Setting(containerEl).setName("Folder color rules").setDesc("Auto-apply a tab color when a note is inside a matching folder. Tag and manual colors take priority.");
+    this.plugin.settings.folderColorRules.forEach((rule, index) => {
+      new import_obsidian.Setting(containerEl).setName(`Rule ${index + 1}`).addText((text) => {
+        text.setPlaceholder("Folder path (e.g. Journal)").setValue(rule.folder).onChange(async (value) => {
+          this.plugin.settings.folderColorRules[index].folder = value;
+          await this.plugin.saveData(this.plugin.settings);
+          this.plugin.applyAllTabColors();
+        });
+      }).addColorPicker((picker) => {
+        picker.setValue(rule.color);
+        picker.onChange(async (value) => {
+          this.plugin.settings.folderColorRules[index].color = value;
+          await this.plugin.saveData(this.plugin.settings);
+          this.plugin.applyAllTabColors();
+        });
+      }).addExtraButton((button) => {
+        button.setIcon("trash").setTooltip("Remove rule").onClick(async () => {
+          this.plugin.settings.folderColorRules.splice(index, 1);
+          await this.plugin.saveData(this.plugin.settings);
+          this.plugin.applyAllTabColors();
+          this.display();
+        });
+      });
+    });
+    new import_obsidian.Setting(containerEl).addButton((button) => {
+      button.setButtonText("Add folder rule").onClick(async () => {
+        this.plugin.settings.folderColorRules.push({ folder: "Folder", color: "#3aa6ff" });
+        await this.plugin.saveData(this.plugin.settings);
+        this.plugin.applyAllTabColors();
+        this.display();
+      });
+    });
+    containerEl.createEl("h3", { text: "Frontmatter Auto Colors" });
+    new import_obsidian.Setting(containerEl).setName("Frontmatter color key").setDesc("Use a frontmatter field for per-note tab color (hex only). Example: tabColor: '#3aa6ff'. Priority: manual > frontmatter > tag > folder.").addText((text) => {
+      text.setPlaceholder("tabColor").setValue(this.plugin.settings.frontmatterColorKey).onChange(async (value) => {
+        this.plugin.settings.frontmatterColorKey = value.trim() || DEFAULT_SETTINGS.frontmatterColorKey;
+        await this.plugin.saveData(this.plugin.settings);
+        this.plugin.applyAllTabColors();
+      });
+    });
+    containerEl.createEl("h3", { text: "Accessibility" });
+    new import_obsidian.Setting(containerEl).setName("Accessibility mode").setDesc("Auto-pick the best text color and warn when a tab color is below your minimum contrast ratio.").addToggle((toggle) => {
+      toggle.setValue(this.plugin.settings.accessibilityMode).onChange(async (value) => {
+        this.plugin.settings.accessibilityMode = value;
+        await this.plugin.saveData(this.plugin.settings);
+        this.plugin.applyAllTabColors();
+        this.display();
+      });
+    });
+    new import_obsidian.Setting(containerEl).setName("Minimum contrast ratio").setDesc("Used only when Accessibility mode is enabled. Higher values are stricter.").addSlider((slider) => {
+      slider.setLimits(4.5, 12, 0.5).setValue(this.plugin.settings.minContrastRatio).setDynamicTooltip();
+      slider.onChange(async (value) => {
+        this.plugin.settings.minContrastRatio = value;
+        await this.plugin.saveData(this.plugin.settings);
+        this.plugin.applyAllTabColors();
       });
     });
     containerEl.createEl("h3", { text: "Note Blend" });

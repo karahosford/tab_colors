@@ -1,81 +1,77 @@
-# 🎨 Tab Colors
+# Tab Colors
 
-![tab colors](images/tabs_colors_reduced.gif)
+![Tab Colors demo](images/tabs_colors_reduced.gif)
 
-Tab Colors lets you right-click a tab in Obsidian and give it a custom color.
+Tab Colors adds custom colors to Obsidian tabs, with optional auto-color rules and note background effects.
 
-This is my first Obsidian plugin, and honestly, it started as a personal "I really wish this existed" project. I have wanted tab colors in Obsidian for a long time.
+## What It Does
 
-The idea was inspired by the Firefox extension Adaptive Tab Bar Colour (https://addons.mozilla.org/en-US/firefox/addon/adaptive-tab-bar-colour/), but I wanted something more like OneNote where I can choose my own colors for tabs.
+- Set or clear a color from a tab right-click menu.
+- Save manual colors per note and keep them on rename/move.
+- Auto-apply colors by tag or folder rule.
+- Auto-apply a color from frontmatter (configurable key).
+- Support horizontal, vertical, and stacked tab layouts.
+- Keep text/icons readable with automatic contrast.
+- Add optional note effects: none, gradient, or dots.
 
-I am still learning, so please be kind. If you spot rough edges or have ideas, feel free to modify, extend, and improve this project.
+Rule priority:
+1. Manual tab color
+2. Frontmatter color - for example: tabColor: "#3aa6ff"
+3. Tag rule
+4. Folder rule
 
-## Highlights
+![Tab context menu](images/tab-context-menu.png)
 
-- Right-click any tab to assign a custom color to that file.
-- Remove a tab color instantly with Clear Tab Color in the same menu.
-- Save colors per file path so your tab colors stay consistent across sessions.
-- Support both horizontal and vertical tab layouts.
-- Apply full-tab background color (not just the text area).
-- Automatically choose a contrasting text/icon color for readability.
-- Create and manage named presets in plugin settings for faster color picking.
-- Auto-assign tab colors from note tags using configurable tag rules.
-- Choose note background effect: none, gradient, or dotted pattern based on tab color.
-- Tune note blend intensity and length from plugin settings.
+## Install (Manual)
 
-![Right-click tab menu showing Set Tab Color and Clear Tab Color](images/tab-context-menu.png)
-
-![Plugin settings showing editable named color presets](images/named-presets-settings.png)
-
-![Vertical tabs with full-tab custom background colors and readable text](images/verticle-tabs-colored.png)
-
-## Installation (Manual)
-
-1. Download this repository (or a release zip).
-2. Build the plugin:
+1. Download this repo (or a release zip).
+2. Build:
 
 ```bash
 npm.cmd install
 npm.cmd run build
 ```
 
-3. Copy these files into your vault plugin folder at `.obsidian/plugins/tab-colors/`:
-	- `manifest.json`
-	- `main.js`
-	- `styles.css`
-4. In Obsidian, open Settings -> Community plugins and enable Tab Colors.
+3. Copy these files to .obsidian/plugins/tab-colors/ in your vault:
+- manifest.json
+- main.js
+- styles.css
+4. Enable Tab Colors in Obsidian: Settings -> Community plugins.
 
-## Usage
+## Quick Use
 
 1. Right-click a tab.
 2. Select Set Tab Color.
-3. Pick a color (or click a named preset).
-4. To remove a color, right-click the tab and select Clear Tab Color.
+3. Choose a preset or custom color.
+4. To remove a color, select Clear Tab Color.
 
-## Configure Named Presets
+## Settings
 
-1. Open Settings -> Community plugins -> Tab Colors.
-2. In Preset swatches, set each preset Name and Color.
-3. Optional: add more presets or reset to defaults.
+In Settings -> Community plugins -> Tab Colors:
 
-## Tag Auto Colors
+- Preset swatches: rename, recolor, add, or reset presets.
+- Frontmatter auto colors: set the frontmatter key (default: tabColor).
+- Tag auto colors: map tags (for example #project) to colors.
+- Folder auto colors: map folder paths (for example Journal) to colors.
+- Accessibility mode: auto-pick best tab text color and warn on low-contrast tab colors.
+- Minimum contrast ratio: set the warning threshold (used by Accessibility mode).
+- Note blend:
+  - Effect: None, Gradient, or Dotted pattern
+  - Blend intensity: 0-100%
+  - Gradient length: 80-600px
+  - Dot size: 1-8px
+  - Dot spacing: 6-40px
+  - Dot intensity: 0-100%
 
-1. Open Settings -> Community plugins -> Tab Colors.
-2. Under Tag Auto Colors, add a rule with a tag (for example `#project`) and a color.
-3. Notes containing that tag will automatically get the configured tab color.
+Frontmatter example:
 
-Manual tab colors set from the right-click menu take priority over tag rules.
+```yaml
+---
+tabColor: "#3aa6ff"
+---
+```
 
-## Tune Note Blend
-
-1. Open Settings -> Community plugins -> Tab Colors.
-2. In Note Blend, choose Note background effect:
-	- None
-	- Gradient
-	- Dotted pattern
-3. Adjust Blend intensity (0-100%).
-4. If using Gradient mode, adjust Blend length (80-600px).
-5. Changes apply immediately.
+Only 3-digit or 6-digit hex values are used from frontmatter.
 
 ## Development
 
