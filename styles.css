@@ -53,6 +53,25 @@
   box-shadow: inset 0 0 0 2px color-mix(in srgb, #d97706 75%, transparent) !important;
 }
 
+.nav-file-title.tab-colors-file-custom {
+  border-radius: 6px;
+}
+
+.nav-file-title.tab-colors-file-custom .nav-file-title-content {
+  background: color-mix(in srgb, var(--tab-colors-file-bg) 20%, transparent);
+  border-left: 3px solid color-mix(in srgb, var(--tab-colors-file-bg) 78%, black);
+  border-radius: 4px;
+  color: var(--tab-colors-file-text);
+  padding-left: 8px;
+  padding-right: 8px;
+  margin-right: 4px;
+}
+
+.nav-file-title.tab-colors-file-custom.is-active .nav-file-title-content,
+.nav-file-title.tab-colors-file-custom:hover .nav-file-title-content {
+  background: color-mix(in srgb, var(--tab-colors-file-bg) 30%, transparent);
+}
+
 .workspace-leaf.tab-colors-note-blend .workspace-leaf-content[data-type="markdown"] .view-content,
 .workspace-leaf.tab-colors-note-blend .workspace-leaf-content[data-type="markdown"] .view-header,
 .workspace-leaf.tab-colors-note-blend .workspace-leaf-content[data-type="markdown"] .markdown-source-view.mod-cm6 .cm-scroller,

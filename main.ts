@@ -10,6 +10,7 @@ interface TabColorsSettings {
   presetColors: PresetColor[];
   tagColorRules: TagColorRule[];
   folderColorRules: FolderColorRule[];
+  explorerFileColoringEnabled: boolean;
   frontmatterColorKey: string;
   accessibilityMode: boolean;
   minContrastRatio: number;
@@ -46,6 +47,7 @@ const DEFAULT_SETTINGS: TabColorsSettings = {
   presetColors: [...DEFAULT_PRESET_COLORS],
   tagColorRules: [],
   folderColorRules: [],
+  explorerFileColoringEnabled: true,
   frontmatterColorKey: "tabColor",
   accessibilityMode: false,
   minContrastRatio: 7,
@@ -489,6 +491,7 @@ export default class TabColorsPlugin extends Plugin {
       workspaceWithIterator.iterateAllLeaves((leaf) => {
         this.applyTabColorForLeaf(leaf);
       });
+      this.applyFileExplorerColors();
       this.updateStatusBar();
       return;
     }
@@ -497,6 +500,7 @@ export default class TabColorsPlugin extends Plugin {
     for (const leaf of markdownLeaves) {
       this.applyTabColorForLeaf(leaf);
     }
+    this.applyFileExplorerColors();
     this.updateStatusBar();
   }
 
@@ -623,6 +627,45 @@ export default class TabColorsPlugin extends Plugin {
       leaf.style.removeProperty("--tab-colors-note-blend-45");
       leaf.style.removeProperty("--tab-colors-note-blend-18");
       leaf.style.removeProperty("--tab-colors-dot-color");
+    });
+
+    const coloredFileRows = document.querySelectorAll<HTMLElement>(".nav-file-title.tab-colors-file-custom");
+    coloredFileRows.forEach((row) => {
+      row.classList.remove("tab-colors-file-custom");
+      row.style.removeProperty("--tab-colors-file-bg");
+      row.style.removeProperty("--tab-colors-file-text");
+    });
+  }
+
+  private applyFileExplorerColors(): void {
+    const fileRows = document.querySelectorAll<HTMLElement>(".nav-file-title[data-path]");
+    fileRows.forEach((row) => {
+      row.classList.remove("tab-colors-file-custom");
+      row.style.removeProperty("--tab-colors-file-bg");
+      row.style.removeProperty("--tab-colors-file-text");
+
+      if (!this.settings.explorerFileColoringEnabled) {
+        return;
+      }
+
+      const path = row.getAttribute("data-path");
+      if (!path) {
+        return;
+      }
+
+      const abstractFile = this.app.vault.getAbstractFileByPath(path);
+      if (!(abstractFile instanceof TFile)) {
+        return;
+      }
+
+      const color = this.resolveColorForFile(abstractFile);
+      if (!color) {
+        return;
+      }
+
+      row.classList.add("tab-colors-file-custom");
+      row.style.setProperty("--tab-colors-file-bg", color);
+      row.style.setProperty("--tab-colors-file-text", this.getContrastingTextColor(color));
     });
   }
 
@@ -911,6 +954,7 @@ export default class TabColorsPlugin extends Plugin {
       presetColors: presetColors.length > 0 ? presetColors : DEFAULT_PRESET_COLORS.map((preset) => ({ ...preset })),
       tagColorRules,
       folderColorRules,
+      explorerFileColoringEnabled: (raw as { explorerFileColoringEnabled?: unknown }).explorerFileColoringEnabled !== false,
       frontmatterColorKey,
       accessibilityMode: Boolean((raw as { accessibilityMode?: unknown }).accessibilityMode),
       minContrastRatio: this.clamp(Number((raw as { minContrastRatio?: unknown }).minContrastRatio ?? DEFAULT_SETTINGS.minContrastRatio), 4.5, 12),
@@ -1159,6 +1203,17 @@ class TabColorsSettingTab extends PluginSettingTab {
     });
 
     containerEl.createEl("h3", { text: "Frontmatter Auto Colors" });
+
+    new Setting(containerEl)
+      .setName("Color files in explorer")
+      .setDesc("Show matching color accents on note files in the File Explorer.")
+      .addToggle((toggle) => {
+        toggle.setValue(this.plugin.settings.explorerFileColoringEnabled).onChange(async (value) => {
+          this.plugin.settings.explorerFileColoringEnabled = value;
+          await this.plugin.saveData(this.plugin.settings);
+          this.plugin.applyAllTabColors();
+        });
+      });
 
     new Setting(containerEl)
       .setName("Frontmatter color key")

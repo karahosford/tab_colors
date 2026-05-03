@@ -37,6 +37,7 @@ var DEFAULT_SETTINGS = {
   presetColors: [...DEFAULT_PRESET_COLORS],
   tagColorRules: [],
   folderColorRules: [],
+  explorerFileColoringEnabled: true,
   frontmatterColorKey: "tabColor",
   accessibilityMode: false,
   minContrastRatio: 7,
@@ -404,6 +405,7 @@ var TabColorsPlugin = class extends import_obsidian.Plugin {
       workspaceWithIterator.iterateAllLeaves((leaf) => {
         this.applyTabColorForLeaf(leaf);
       });
+      this.applyFileExplorerColors();
       this.updateStatusBar();
       return;
     }
@@ -411,6 +413,7 @@ var TabColorsPlugin = class extends import_obsidian.Plugin {
     for (const leaf of markdownLeaves) {
       this.applyTabColorForLeaf(leaf);
     }
+    this.applyFileExplorerColors();
     this.updateStatusBar();
   }
   addRecentColor(color) {
@@ -524,6 +527,38 @@ var TabColorsPlugin = class extends import_obsidian.Plugin {
       leaf.style.removeProperty("--tab-colors-note-blend-45");
       leaf.style.removeProperty("--tab-colors-note-blend-18");
       leaf.style.removeProperty("--tab-colors-dot-color");
+    });
+    const coloredFileRows = document.querySelectorAll(".nav-file-title.tab-colors-file-custom");
+    coloredFileRows.forEach((row) => {
+      row.classList.remove("tab-colors-file-custom");
+      row.style.removeProperty("--tab-colors-file-bg");
+      row.style.removeProperty("--tab-colors-file-text");
+    });
+  }
+  applyFileExplorerColors() {
+    const fileRows = document.querySelectorAll(".nav-file-title[data-path]");
+    fileRows.forEach((row) => {
+      row.classList.remove("tab-colors-file-custom");
+      row.style.removeProperty("--tab-colors-file-bg");
+      row.style.removeProperty("--tab-colors-file-text");
+      if (!this.settings.explorerFileColoringEnabled) {
+        return;
+      }
+      const path = row.getAttribute("data-path");
+      if (!path) {
+        return;
+      }
+      const abstractFile = this.app.vault.getAbstractFileByPath(path);
+      if (!(abstractFile instanceof import_obsidian.TFile)) {
+        return;
+      }
+      const color = this.resolveColorForFile(abstractFile);
+      if (!color) {
+        return;
+      }
+      row.classList.add("tab-colors-file-custom");
+      row.style.setProperty("--tab-colors-file-bg", color);
+      row.style.setProperty("--tab-colors-file-text", this.getContrastingTextColor(color));
     });
   }
   resolveColorForFile(file) {
@@ -753,6 +788,7 @@ var TabColorsPlugin = class extends import_obsidian.Plugin {
       presetColors: presetColors.length > 0 ? presetColors : DEFAULT_PRESET_COLORS.map((preset) => ({ ...preset })),
       tagColorRules,
       folderColorRules,
+      explorerFileColoringEnabled: raw.explorerFileColoringEnabled !== false,
       frontmatterColorKey,
       accessibilityMode: Boolean(raw.accessibilityMode),
       minContrastRatio: this.clamp(Number(raw.minContrastRatio ?? DEFAULT_SETTINGS.minContrastRatio), 4.5, 12),
@@ -941,6 +977,13 @@ var TabColorsSettingTab = class extends import_obsidian.PluginSettingTab {
       });
     });
     containerEl.createEl("h3", { text: "Frontmatter Auto Colors" });
+    new import_obsidian.Setting(containerEl).setName("Color files in explorer").setDesc("Show matching color accents on note files in the File Explorer.").addToggle((toggle) => {
+      toggle.setValue(this.plugin.settings.explorerFileColoringEnabled).onChange(async (value) => {
+        this.plugin.settings.explorerFileColoringEnabled = value;
+        await this.plugin.saveData(this.plugin.settings);
+        this.plugin.applyAllTabColors();
+      });
+    });
     new import_obsidian.Setting(containerEl).setName("Frontmatter color key").setDesc("Use a frontmatter field for per-note tab color (hex only). Example: tabColor: '#3aa6ff'. Priority: manual > frontmatter > tag > folder.").addText((text) => {
       text.setPlaceholder("tabColor").setValue(this.plugin.settings.frontmatterColorKey).onChange(async (value) => {
         this.plugin.settings.frontmatterColorKey = value.trim() || DEFAULT_SETTINGS.frontmatterColorKey;
