@@ -105,6 +105,19 @@
   background-repeat: repeat;
 }
 
+.tab-colors-swatch-section-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin: 8px 0 4px;
+}
+
+.tab-colors-swatch-section-label:first-child {
+  margin-top: 0;
+}
+
 .tab-colors-swatch-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(28px, 1fr));
@@ -119,10 +132,52 @@
   border: 1px solid var(--background-modifier-border);
   cursor: pointer;
   padding: 0;
+  position: relative;
+}
+
+/* Swatch name label — hidden on desktop, shown on mobile */
+.tab-colors-swatch-label {
+  display: none;
+}
+
+/* Larger tap targets on mobile */
+.is-mobile .tab-colors-swatch-grid {
+  grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
+  gap: 10px;
+}
+
+.is-mobile .tab-colors-swatch {
+  width: 52px;
+  height: 52px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  padding-bottom: 4px;
+}
+
+.is-mobile .tab-colors-swatch-label {
+  display: block;
+  font-size: 0.6rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--tab-colors-text, #111);
+  text-shadow: 0 0 3px rgba(0,0,0,0.4);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 48px;
+  text-align: center;
 }
 
 .tab-colors-swatch:hover {
   transform: translateY(-1px);
+}
+
+.tab-colors-swatch.is-selected {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 2px;
 }
 
 .tab-colors-contrast-warning {
@@ -140,3 +195,33 @@
 .tab-colors-contrast-warning.is-visible {
   display: block;
 }
+
+/* Status bar indicator */
+.tab-colors-status-bar-item {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+}
+
+.tab-colors-status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+  background-color: transparent;
+  border: 1.5px solid var(--text-muted);
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.tab-colors-status-dot.has-color {
+  background-color: var(--tab-colors-status-color);
+  border-color: color-mix(in srgb, var(--tab-colors-status-color) 75%, black);
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--tab-colors-status-color) 35%, transparent);
+}
+
+.tab-colors-status-bar-item:hover .tab-colors-status-dot {
+  transform: scale(1.2);
+}
+

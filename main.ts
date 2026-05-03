@@ -1,4 +1,4 @@
-import { App, FileView, Menu, MenuItem, Modal, Plugin, PluginSettingTab, Setting, TFile } from "obsidian";
+import { App, FileView, Menu, MenuItem, Modal, Platform, Plugin, PluginSettingTab, Setting, TFile, WorkspaceLeaf } from "obsidian";
 
 interface PresetColor {
   name: string;
@@ -19,6 +19,7 @@ interface TabColorsSettings {
   dotSizePx: number;
   dotSpacingPx: number;
   dotIntensity: number;
+  recentColors: string[];
 }
 
 interface TagColorRule {
@@ -53,21 +54,25 @@ const DEFAULT_SETTINGS: TabColorsSettings = {
   noteBackgroundEffect: "dots",
   dotSizePx: 2,
   dotSpacingPx: 16,
-  dotIntensity: 55
+  dotIntensity: 55,
+  recentColors: []
 };
 
 class ColorPickerModal extends Modal {
   private result: string | null = null;
+  private shouldClear = false;
   private selectedColor: string;
   private readonly plugin: TabColorsPlugin;
   private readonly onSubmit: (color: string | null) => void;
   private readonly presetColors: PresetColor[];
+  private readonly recentColors: string[];
 
-  constructor(plugin: TabColorsPlugin, initialColor: string | null, presetColors: PresetColor[], onSubmit: (color: string | null) => void) {
+  constructor(plugin: TabColorsPlugin, initialColor: string | null, presetColors: PresetColor[], recentColors: string[], onSubmit: (color: string | null) => void) {
     super(plugin.app);
     this.plugin = plugin;
     this.onSubmit = onSubmit;
     this.presetColors = presetColors;
+    this.recentColors = recentColors;
     this.selectedColor = initialColor ?? "#3aa6ff";
     this.setTitle("Set Tab Color");
   }
@@ -76,27 +81,52 @@ class ColorPickerModal extends Modal {
     const { contentEl } = this;
     contentEl.empty();
 
-    const swatchWrap = contentEl.createDiv({ cls: "tab-colors-swatch-grid" });
-    for (const preset of this.presetColors) {
-      const swatch = swatchWrap.createEl("button", {
+    const swatchMap = new Map<string, HTMLElement>();
+
+    const buildSwatch = (wrap: HTMLElement, color: string, label: string): void => {
+      const swatch = wrap.createEl("button", {
         cls: "tab-colors-swatch",
         attr: {
           type: "button",
-          title: `${preset.name} (${preset.color})`,
-          "aria-label": `Use preset ${preset.name}`
+          title: `${label} (${color})`,
+          "aria-label": `Use color ${label}`
         }
       });
-      swatch.style.backgroundColor = preset.color;
+      swatch.style.backgroundColor = color;
+      swatch.createSpan({ cls: "tab-colors-swatch-label", text: label });
+      swatchMap.set(color.toLowerCase(), swatch);
       swatch.addEventListener("click", () => {
-        this.selectedColor = preset.color;
+        this.selectedColor = color;
+        updateSwatchHighlight(color);
         const input = contentEl.querySelector<HTMLInputElement>('input[type="color"]');
         if (input) {
-          input.value = preset.color;
+          input.value = color;
           input.dispatchEvent(new Event("input", { bubbles: true }));
           input.dispatchEvent(new Event("change", { bubbles: true }));
         }
       });
+    };
+
+    if (this.recentColors.length > 0) {
+      contentEl.createDiv({ cls: "tab-colors-swatch-section-label", text: "Recent" });
+      const recentWrap = contentEl.createDiv({ cls: "tab-colors-swatch-grid" });
+      for (const color of this.recentColors) {
+        buildSwatch(recentWrap, color, color);
+      }
     }
+
+    contentEl.createDiv({ cls: "tab-colors-swatch-section-label", text: "Presets" });
+    const swatchWrap = contentEl.createDiv({ cls: "tab-colors-swatch-grid" });
+    for (const preset of this.presetColors) {
+      buildSwatch(swatchWrap, preset.color, preset.name);
+    }
+
+    const updateSwatchHighlight = (color: string): void => {
+      swatchMap.forEach((el, c) => {
+        el.classList.toggle("is-selected", c === color.toLowerCase());
+      });
+    };
+    updateSwatchHighlight(this.selectedColor);
 
     new Setting(contentEl)
       .setName("Color")
@@ -105,6 +135,7 @@ class ColorPickerModal extends Modal {
         picker.setValue(this.selectedColor);
         picker.onChange((value) => {
           this.selectedColor = value;
+          updateSwatchHighlight(value);
           updateContrastWarning();
         });
       });
@@ -125,6 +156,12 @@ class ColorPickerModal extends Modal {
         });
       })
       .addButton((button) => {
+        button.setButtonText("Remove Color").onClick(() => {
+          this.shouldClear = true;
+          this.close();
+        });
+      })
+      .addButton((button) => {
         button.setButtonText("Cancel").onClick(() => {
           this.result = null;
           this.close();
@@ -136,7 +173,7 @@ class ColorPickerModal extends Modal {
 
   onClose(): void {
     this.contentEl.empty();
-    this.onSubmit(this.result);
+    this.onSubmit(this.shouldClear ? "" : this.result);
   }
 }
 
@@ -144,11 +181,34 @@ export default class TabColorsPlugin extends Plugin {
   settings: TabColorsSettings = DEFAULT_SETTINGS;
   private applyAllTimeoutId: number | null = null;
   private readonly leafApplyState = new WeakMap<object, string>();
+  private statusBarItem: HTMLElement | null = null;
 
   async onload(): Promise<void> {
     await this.loadSettings();
     this.applyGlobalBlendSettings();
     this.addSettingTab(new TabColorsSettingTab(this.app, this));
+
+    this.statusBarItem = this.addStatusBarItem();
+    this.statusBarItem.addClass("tab-colors-status-bar-item");
+    if (Platform.isMobile) {
+      this.statusBarItem.hide();
+    }
+    this.statusBarItem.addEventListener("click", () => {
+      const activeFile = this.app.workspace.getActiveFile();
+      if (!activeFile) return;
+      const current = this.settings.fileColors[activeFile.path] ?? this.resolveColorForFile(activeFile);
+      new ColorPickerModal(this, current, this.settings.presetColors, this.settings.recentColors, async (selected) => {
+        if (selected === null) return;
+        if (selected === "") {
+          delete this.settings.fileColors[activeFile.path];
+        } else {
+          this.settings.fileColors[activeFile.path] = selected;
+          this.addRecentColor(selected);
+        }
+        await this.saveSettings();
+        this.scheduleApplyAllTabColors(0);
+      }).open();
+    });
 
     this.registerEvent(
       this.app.vault.on("rename", async (file, oldPath) => {
@@ -202,6 +262,7 @@ export default class TabColorsPlugin extends Plugin {
     this.registerEvent(
       this.app.workspace.on("active-leaf-change", () => {
         this.scheduleApplyAllTabColors();
+        this.updateStatusBar();
       })
     );
 
@@ -222,13 +283,18 @@ export default class TabColorsPlugin extends Plugin {
         const activeFile = this.app.workspace.getActiveFile();
         if (activeFile) {
           if (!checking) {
-            const current = this.settings.fileColors[activeFile.path] ?? null;
-            new ColorPickerModal(this, current, this.settings.presetColors, async (selected) => {
-              if (!selected) {
+            const current = this.settings.fileColors[activeFile.path] ?? this.resolveColorForFile(activeFile);
+            new ColorPickerModal(this, current, this.settings.presetColors, this.settings.recentColors, async (selected) => {
+              if (selected === null) {
                 return;
               }
 
-              this.settings.fileColors[activeFile.path] = selected;
+              if (selected === "") {
+                delete this.settings.fileColors[activeFile.path];
+              } else {
+                this.settings.fileColors[activeFile.path] = selected;
+                this.addRecentColor(selected);
+              }
               await this.saveSettings();
               this.scheduleApplyAllTabColors(0);
             }).open();
@@ -254,6 +320,34 @@ export default class TabColorsPlugin extends Plugin {
         return false;
       }
     });
+
+    this.addCommand({
+      id: "cycle-tab-color",
+      name: "Cycle tab color through presets",
+      checkCallback: (checking: boolean) => {
+        const activeFile = this.app.workspace.getActiveFile();
+        if (activeFile) {
+          if (!checking) {
+            const presets = this.settings.presetColors;
+            const currentColor = this.settings.fileColors[activeFile.path] ?? null;
+            const idx = currentColor
+              ? presets.findIndex(p => p.color.toLowerCase() === currentColor.toLowerCase())
+              : -1;
+            const nextIdx = idx + 1;
+            if (nextIdx >= presets.length) {
+              delete this.settings.fileColors[activeFile.path];
+            } else {
+              this.settings.fileColors[activeFile.path] = presets[nextIdx].color;
+              this.addRecentColor(presets[nextIdx].color);
+            }
+            this.saveSettings().then(() => this.scheduleApplyAllTabColors(0));
+          }
+          return true;
+        }
+        return false;
+      }
+    });
+
   }
 
   onunload(): void {
@@ -269,9 +363,9 @@ export default class TabColorsPlugin extends Plugin {
 
   private addTabColorMenuItems(menu: Menu, file: TFile, source: string, leaf: unknown | null): void {
     const sourceLower = source.toLowerCase();
-    const isLikelyTabContext = sourceLower.includes("tab") || sourceLower.includes("leaf");
+    const isLikelyTabContext = sourceLower.includes("tab") || sourceLower.includes("leaf") || sourceLower.includes("more-options") || sourceLower.includes("pane");
     const hasTabHeader = this.getTabHeaderEl(leaf) !== null;
-    if (!isLikelyTabContext && !hasTabHeader) {
+    if (!Platform.isMobile && !isLikelyTabContext && !hasTabHeader) {
       return;
     }
 
@@ -287,6 +381,7 @@ export default class TabColorsPlugin extends Plugin {
             .setTitle(preset.name)
             .onClick(async () => {
               this.settings.fileColors[file.path] = preset.color;
+              this.addRecentColor(preset.color);
               await this.saveSettings();
               this.scheduleApplyAllTabColors(0);
             });
@@ -300,13 +395,18 @@ export default class TabColorsPlugin extends Plugin {
           .setTitle("Custom Color...")
           .setIcon("palette")
           .onClick(() => {
-            const current = this.settings.fileColors[file.path] ?? null;
-            new ColorPickerModal(this, current, this.settings.presetColors, async (selected) => {
-              if (!selected) {
+            const current = this.settings.fileColors[file.path] ?? this.resolveColorForFile(file);
+            new ColorPickerModal(this, current, this.settings.presetColors, this.settings.recentColors, async (selected) => {
+              if (selected === null) {
                 return;
               }
 
-              this.settings.fileColors[file.path] = selected;
+              if (selected === "") {
+                delete this.settings.fileColors[file.path];
+              } else {
+                this.settings.fileColors[file.path] = selected;
+                this.addRecentColor(selected);
+              }
               await this.saveSettings();
               this.scheduleApplyAllTabColors(0);
             }).open();
@@ -314,18 +414,19 @@ export default class TabColorsPlugin extends Plugin {
       });
     });
 
-    menu.addItem((item) => {
-      item
-        .setTitle("Clear Tab Color")
-        .setIcon("paintbrush")
-        .setSection("action")
-        .setDisabled(!this.settings.fileColors[file.path])
-        .onClick(async () => {
-          delete this.settings.fileColors[file.path];
-          await this.saveSettings();
-          this.scheduleApplyAllTabColors(0);
-        });
-    });
+    if (this.settings.fileColors[file.path]) {
+      menu.addItem((item) => {
+        item
+          .setTitle("Clear Tab Color")
+          .setIcon("paintbrush")
+          .setSection("action")
+          .onClick(async () => {
+            delete this.settings.fileColors[file.path];
+            await this.saveSettings();
+            this.scheduleApplyAllTabColors(0);
+          });
+      });
+    }
   }
 
   private scheduleApplyAllTabColors(delayMs = 60): void {
@@ -388,12 +489,37 @@ export default class TabColorsPlugin extends Plugin {
       workspaceWithIterator.iterateAllLeaves((leaf) => {
         this.applyTabColorForLeaf(leaf);
       });
+      this.updateStatusBar();
       return;
     }
 
     const markdownLeaves = this.app.workspace.getLeavesOfType("markdown");
     for (const leaf of markdownLeaves) {
       this.applyTabColorForLeaf(leaf);
+    }
+    this.updateStatusBar();
+  }
+
+  addRecentColor(color: string): void {
+    const normalized = color.toLowerCase();
+    this.settings.recentColors = [
+      color,
+      ...this.settings.recentColors.filter(c => c.toLowerCase() !== normalized)
+    ].slice(0, 5);
+  }
+
+  private updateStatusBar(): void {
+    if (!this.statusBarItem) return;
+    const file = this.app.workspace.getActiveFile();
+    const color = file ? this.resolveColorForFile(file) : null;
+    this.statusBarItem.empty();
+    const dot = this.statusBarItem.createDiv({ cls: "tab-colors-status-dot" });
+    if (color) {
+      dot.style.setProperty("--tab-colors-status-color", color);
+      dot.addClass("has-color");
+      this.statusBarItem.setAttribute("aria-label", `Tab color: ${color}. Click to change.`);
+    } else {
+      this.statusBarItem.setAttribute("aria-label", file ? "No tab color — click to set" : "Tab color");
     }
   }
 
@@ -793,7 +919,12 @@ export default class TabColorsPlugin extends Plugin {
       noteBackgroundEffect: this.normalizeNoteBackgroundEffect((raw as { noteBackgroundEffect?: unknown }).noteBackgroundEffect),
       dotSizePx: this.clamp(Number((raw as { dotSizePx?: unknown }).dotSizePx ?? DEFAULT_SETTINGS.dotSizePx), 1, 8),
       dotSpacingPx: this.clamp(Number((raw as { dotSpacingPx?: unknown }).dotSpacingPx ?? DEFAULT_SETTINGS.dotSpacingPx), 6, 40),
-      dotIntensity: this.clamp(Number((raw as { dotIntensity?: unknown }).dotIntensity ?? DEFAULT_SETTINGS.dotIntensity), 0, 100)
+      dotIntensity: this.clamp(Number((raw as { dotIntensity?: unknown }).dotIntensity ?? DEFAULT_SETTINGS.dotIntensity), 0, 100),
+      recentColors: Array.isArray((raw as { recentColors?: unknown }).recentColors)
+        ? (raw as { recentColors: unknown[] }).recentColors
+            .filter((v): v is string => typeof v === "string" && /^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(v))
+            .slice(0, 5)
+        : []
     };
   }
 
@@ -1149,5 +1280,6 @@ class TabColorsSettingTab extends PluginSettingTab {
           this.plugin.applyAllTabColors();
         });
       });
+
   }
 }

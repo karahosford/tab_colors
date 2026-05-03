@@ -13,6 +13,7 @@ Tab Colors adds custom colors to Obsidian tabs, with optional auto-color rules a
 - Support horizontal, vertical, and stacked tab layouts.
 - Keep text/icons readable with automatic contrast.
 - Add optional note effects: none, gradient, or dots.
+- Status bar dot shows the active note's color — click it to open the color picker.
 
 Rule priority:
 1. Manual tab color
@@ -44,6 +45,8 @@ npm.cmd run build
 2. Select Set Tab Color.
 3. Choose a preset or custom color.
 4. To remove a color, select Clear Tab Color.
+
+The **status bar dot** (bottom of the window) shows the active note's color at a glance. Click it to open the color picker directly.
 
 ## Settings
 
