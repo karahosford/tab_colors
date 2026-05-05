@@ -46,6 +46,8 @@ npm.cmd run build
 3. Choose a preset or custom color.
 4. To remove a color, select Clear Tab Color.
 
+![alt text](images/statusbar.png)
+
 The **status bar dot** (bottom of the window) shows the active note's color at a glance. Click it to open the color picker directly.
 
 ## Settings
